@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root { --background: #fffdfb; --foreground: #17100e; }
+@theme {
+  --font-mono: var(--font-geist-mono);
+  --font-pixel-square: var(--font-geist-pixel-square);
+  --font-pixel-circle: var(--font-geist-pixel-circle);
+  --font-pixel-grid: var(--font-geist-pixel-grid);
+  --font-pixel-triangle: var(--font-geist-pixel-triangle);
+  --font-pixel-line: var(--font-geist-pixel-line);
+}
+@utility font-pixel-square { font-family: var(--font-geist-pixel-square); font-variation-settings: "ELSH" 1; }
+@utility font-pixel-circle { font-family: var(--font-geist-pixel-circle); font-variation-settings: "ELSH" 20; }
+@utility font-pixel-grid { font-family: var(--font-geist-pixel-grid); font-variation-settings: "ELSH" 40; }
+@utility font-pixel-triangle { font-family: var(--font-geist-pixel-triangle); font-variation-settings: "ELSH" 60; }
+@utility font-pixel-line { font-family: var(--font-geist-pixel-line); font-variation-settings: "ELSH" 80; }
+* { box-sizing: border-box; }
+body { background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+button, input { font: inherit; }

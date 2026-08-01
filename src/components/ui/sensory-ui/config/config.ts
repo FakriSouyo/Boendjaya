@@ -1,0 +1,3 @@
+export type SoundRole = "interaction.tap" | "interaction.subtle" | "interaction.toggle" | "interaction.confirm" | "overlay.open" | "overlay.close" | "navigation.tab" | "navigation.forward" | "notification.info" | "notification.success" | "notification.milestone";
+export interface SensoryUIConfig { enabled: boolean; volume: number; theme: string; categories: Record<string, boolean>; reducedMotion: "inherit" | "force-off" | "force-on"; overrides: Record<string, string>; }
+export const defaultConfig: SensoryUIConfig = { enabled: true, volume: .35, theme: "arcade", categories: { interaction: true, overlay: true, navigation: true, notification: true, hero: false }, reducedMotion: "inherit", overrides: {} };

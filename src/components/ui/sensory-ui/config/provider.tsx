@@ -1,0 +1,9 @@
+"use client";
+import { createContext, useContext, useMemo } from "react";
+import { defaultConfig, type SensoryUIConfig, type SoundRole } from "./config";
+const Context = createContext<{ play: (role: SoundRole) => void }>({ play: () => {} });
+export function SensoryUIProvider({ children, config = {} }: { children: React.ReactNode; config?: Partial<SensoryUIConfig> }) {
+  const value = useMemo(() => { const settings = { ...defaultConfig, ...config, categories: { ...defaultConfig.categories, ...config.categories } }; return { play: (role: SoundRole) => { if (typeof window === "undefined" || !settings.enabled || settings.categories[role.split(".")[0]] === false || (settings.reducedMotion === "inherit" && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) return; const audio = new AudioContext(); const notes: Record<string, number[]> = { "interaction.tap": [540], "interaction.subtle": [390], "interaction.toggle": [610], "interaction.confirm": [720], "overlay.open": [480], "overlay.close": [280], "navigation.tab": [450], "navigation.forward": [610], "notification.info": [520], "notification.success": [760], "notification.milestone": [523, 659, 784, 1047] }; (notes[role] ?? [440]).forEach((frequency, index) => { const osc = audio.createOscillator(), gain = audio.createGain(), start = audio.currentTime + index * .11; osc.type = role === "notification.milestone" ? "sine" : "square"; osc.frequency.value = frequency; gain.gain.setValueAtTime((role === "notification.milestone" ? .07 : .05) * settings.volume, start); gain.gain.exponentialRampToValueAtTime(.001, start + (role === "notification.milestone" ? .22 : .1)); osc.connect(gain).connect(audio.destination); osc.start(start); osc.stop(start + (role === "notification.milestone" ? .23 : .11)); }); } }; }, [config]);
+  return <Context.Provider value={value}>{children}</Context.Provider>;
+}
+export const useSensoryUI = () => useContext(Context);
