@@ -52,6 +52,12 @@ export type NotificationItem = {
   createdAt: string;
 };
 
+export type TransactionItem = {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+};
+
 export type Transaction = {
   id: number;
   orderNumber: string;
@@ -59,6 +65,20 @@ export type Transaction = {
   paymentMethod: "cash" | "qris";
   paidAt: string;
   itemCount: number;
+  items: TransactionItem[];
+};
+
+export type ProductSale = {
+  name: string;
+  quantity: number;
+  revenue: number;
+};
+
+export type ProductSaleEntry = {
+  dateLabel: string;
+  name: string;
+  quantity: number;
+  revenue: number;
 };
 
 export type FinancialRow = {

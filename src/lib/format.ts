@@ -12,3 +12,9 @@ export const unitLabel = (unit: string) => ({ gram: "gram", pcs: "pcs", liter: "
 export const makeOrderNumber = () => `BJ-${Date.now().toString().slice(-7)}`;
 
 export const marginPct = (price: number, cogs: number) => (price > 0 ? Math.round((1 - cogs / price) * 100) : 0);
+
+export const jakartaDate = (value: string) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+};

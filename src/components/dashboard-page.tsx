@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/sensory-ui/button";
 import { ExportButtons } from "@/components/cart-panel";
-import { currency, formatDate, formatMonth, marginPct } from "@/lib/format";
+import { currency, formatDate, formatMonth, jakartaDate, marginPct } from "@/lib/format";
 import { exportFinancialCsv, exportFinancialPdf } from "@/lib/reports";
-import { loadSettings, loadTodayRevenue, saveSettings } from "@/lib/data";
-import type { FinancialRow, Ingredient } from "@/lib/types";
+import { loadProductSales, loadSettings, loadTodayRevenue, saveSettings } from "@/lib/data";
+import type { FinancialRow, Ingredient, ProductSaleEntry } from "@/lib/types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 
 type Props = {
@@ -21,11 +21,12 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
   const [targetInput, setTargetInput] = useState(3000000);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [now, setNow] = useState(() => new Date());
+  const [productSales, setProductSales] = useState<ProductSaleEntry[]>([]);
+  const [selectedDate, setSelectedDate] = useState(() => jakartaDate(new Date().toISOString()));
+  const followingDateRef = useRef(true);
+  const selectedDateRef = useRef(selectedDate);
 
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(t);
-  }, []);
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
 
   const refreshGoal = useCallback(async () => {
     const [settings, today] = await Promise.all([loadSettings(), loadTodayRevenue()]);
@@ -37,6 +38,29 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
   useEffect(() => { void refreshGoal(); }, [refreshGoal]);
 
   useEffect(() => {
+    const t = window.setInterval(() => {
+      const nowDate = new Date();
+      setNow(nowDate);
+      const today = jakartaDate(nowDate.toISOString());
+      if (followingDateRef.current && today !== selectedDateRef.current) {
+        selectedDateRef.current = today;
+        setSelectedDate(today);
+        void refreshGoal();
+      }
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [refreshGoal]);
+
+  useEffect(() => { void loadProductSales().then(setProductSales); }, []);
+
+  const pickDate = (date: string) => {
+    const today = jakartaDate(new Date().toISOString());
+    followingDateRef.current = today === date;
+    selectedDateRef.current = date;
+    setSelectedDate(date);
+  };
+
+  useEffect(() => {
     if (!supabase) {
       setRows([]);
       return;
@@ -45,7 +69,9 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
     const load = async () => {
       const view = period === "daily" ? "daily_financials" : "monthly_financials";
       const col = period === "daily" ? "report_date" : "report_month";
-      const { data, error } = await client.from(view).select("*").order(col, { ascending: false }).limit(period === "daily" ? 31 : 12);
+      const query = client.from(view).select("*");
+      if (period === "daily") query.lte("report_date", selectedDate);
+      const { data, error } = await query.order(col, { ascending: false }).limit(period === "daily" ? 31 : 12);
       if (error || !data?.length) {
         setRows([]);
         return;
@@ -64,7 +90,7 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
       }));
     };
     void load();
-  }, [period]);
+  }, [period, selectedDate]);
 
   const summary = useMemo(() => {
     const revenue = rows.reduce((s, r) => s + r.revenue, 0);
@@ -78,8 +104,32 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
   const lowStock = ingredients.filter(i => i.currentStock <= i.minimumStock);
   const title = period === "daily" ? "LAPORAN KEUANGAN HARIAN" : "LAPORAN KEUANGAN BULANAN";
   const filenameBase = period === "daily" ? "boendjaya-harian" : "boendjaya-bulanan";
+  const todayJakarta = jakartaDate(new Date().toISOString());
 
-  const exportPdf = () => void exportFinancialPdf(rows, period, title, `${filenameBase}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  const selectedRevenue = useMemo(() => {
+    if (period === "monthly") return summary.revenue;
+    return rows.find(r => r.label === selectedDate)?.revenue ?? 0;
+  }, [period, rows, selectedDate, summary.revenue]);
+  const firstCardLabel = period === "monthly" ? "TOTAL PENJUALAN" : selectedDate === todayJakarta ? "PENJUALAN HARI INI" : `PENJUALAN ${formatDate(selectedDate)}`;
+
+  const salesByProduct = useMemo(() => {
+    const keySet = new Set(rows.map(r => (period === "daily" ? r.label : r.label.slice(0, 7))));
+    const agg = new Map<string, { name: string; quantity: number; revenue: number }>();
+    for (const e of productSales) {
+      const key = period === "daily" ? e.dateLabel : e.dateLabel.slice(0, 7);
+      if (!keySet.has(key)) continue;
+      const cur = agg.get(e.name) ?? { name: e.name, quantity: 0, revenue: 0 };
+      cur.quantity += e.quantity;
+      cur.revenue += e.revenue;
+      agg.set(e.name, cur);
+    }
+    return [...agg.values()].sort((a, b) => b.quantity - a.quantity);
+  }, [productSales, rows, period]);
+
+  const exportPdf = () => void exportFinancialPdf(rows, period, title, `${filenameBase}-${new Date().toISOString().slice(0, 10)}.pdf`, {
+    salesByProduct,
+    lowStock: lowStock.map(i => ({ name: i.name, currentStock: i.currentStock, unit: i.unit, minimumStock: i.minimumStock })),
+  });
   const exportExcel = () => exportFinancialCsv(rows, period, `${filenameBase}-${new Date().toISOString().slice(0, 10)}.csv`);
 
   const saveGoal = async () => {
@@ -100,6 +150,19 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
           <Button sound="navigation.tab" variant={period === "daily" ? "default" : "ghost"} onClick={() => setPeriod("daily")} className="rounded-none text-xs">Harian</Button>
           <Button sound="navigation.tab" variant={period === "monthly" ? "default" : "ghost"} onClick={() => setPeriod("monthly")} className="rounded-none text-xs">Bulanan</Button>
         </div>
+        {period === "daily" && (
+          <label className="flex items-center gap-1 border border-[#d8ccc6] bg-white px-2 py-1 font-mono text-[10px] text-zinc-500">
+            <span>HINGGA</span>
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayJakarta}
+              onChange={e => e.target.value && pickDate(e.target.value)}
+              className="bg-transparent text-[11px] text-[#17100e] outline-none"
+            />
+            {selectedDate !== todayJakarta && <Button sound="interaction.tap" variant="ghost" onClick={() => pickDate(todayJakarta)} className="rounded-none px-2 text-[10px] text-[#e73b28]">HARI INI</Button>}
+          </label>
+        )}
         <ExportButtons onPdf={exportPdf} onExcel={exportExcel} />
       </div>
     </div>
@@ -132,8 +195,8 @@ export function DashboardPage({ ingredients, onGoalSaved }: Props) {
     </article>
 
     <div className="mt-6 grid gap-px border border-[#e8ddd8] bg-[#e8ddd8] sm:grid-cols-2 lg:grid-cols-4">
-      {[["PENJUALAN HARI INI", currency(todayRevenue)], ["PROFIT (TABEL)", currency(summary.profit)], ["COGS (TABEL)", currency(summary.totalCogs)], ["MARGIN", `${summary.margin}%`]].map(([label, value]) =>
-        <article key={label} className="bg-white p-5"><p className="font-mono text-[10px] text-zinc-500">{label}</p><p className="mt-4 text-xl font-black text-[#e73b28]">{value}</p></article>,
+      {[firstCardLabel, "PROFIT (TABEL)", "COGS (TABEL)", "MARGIN"].map((label, index) =>
+        <article key={label} className="bg-white p-5"><p className="font-mono text-[10px] text-zinc-500">{label}</p><p className="mt-4 text-xl font-black text-[#e73b28]">{index === 0 ? currency(selectedRevenue) : index === 1 ? currency(summary.profit) : index === 2 ? currency(summary.totalCogs) : `${summary.margin}%`}</p></article>,
       )}
     </div>
 

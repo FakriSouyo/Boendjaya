@@ -1,5 +1,6 @@
 import { buildRecipeLines, refreshProductCogs } from "./inventory";
-import type { Ingredient, NotificationItem, OutletSettings, Product, RecipeDraft, RecipeLine, StockPurchase, Transaction } from "./types";
+import type { Ingredient, NotificationItem, OutletSettings, Product, ProductSaleEntry, RecipeDraft, RecipeLine, StockPurchase, Transaction } from "./types";
+import { jakartaDate } from "./format";
 import { supabase } from "./supabase/client";
 
 const GOAL_KEY = "boendjaya-daily-goal";
@@ -259,7 +260,7 @@ export async function loadTransactions(): Promise<Transaction[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("orders")
-    .select("id,order_number,total,payments(method,paid_at),order_items(quantity)")
+    .select("id,order_number,total,payments(method,paid_at),order_items(product_name,quantity,unit_price)")
     .eq("status", "paid")
     .order("created_at", { ascending: false })
     .limit(100);
@@ -267,8 +268,41 @@ export async function loadTransactions(): Promise<Transaction[]> {
   return data.map(order => {
     const payment = Array.isArray(order.payments) ? order.payments[0] : order.payments;
     const items = Array.isArray(order.order_items) ? order.order_items : [];
-    return { id: order.id, orderNumber: order.order_number, total: Number(order.total), paymentMethod: payment?.method === "qris" ? "qris" : "cash", paidAt: payment?.paid_at ?? "", itemCount: items.reduce((sum, item) => sum + Number(item.quantity), 0) };
+    return {
+      id: order.id,
+      orderNumber: order.order_number,
+      total: Number(order.total),
+      paymentMethod: payment?.method === "qris" ? "qris" : "cash",
+      paidAt: payment?.paid_at ?? "",
+      itemCount: items.reduce((sum, item) => sum + Number(item.quantity), 0),
+      items: items.map(item => ({ name: item.product_name, quantity: Number(item.quantity), unitPrice: Number(item.unit_price) })),
+    };
   });
+}
+
+export async function loadProductSales(): Promise<ProductSaleEntry[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("orders")
+    .select("payments(paid_at),order_items(product_name,quantity,unit_price)")
+    .eq("status", "paid")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error || !data) return [];
+  const result: ProductSaleEntry[] = [];
+  for (const order of data) {
+    const payment = Array.isArray(order.payments) ? order.payments[0] : order.payments;
+    if (!payment?.paid_at) continue;
+    const dateLabel = jakartaDate(payment.paid_at);
+    if (!dateLabel) continue;
+    const items = Array.isArray(order.order_items) ? order.order_items : [];
+    for (const item of items) {
+      const quantity = Number(item.quantity);
+      const unitPrice = Number(item.unit_price);
+      result.push({ dateLabel, name: item.product_name, quantity, revenue: quantity * unitPrice });
+    }
+  }
+  return result;
 }
 
 export async function loadRecipes(ingredients: Ingredient[]): Promise<RecipeLine[]> {

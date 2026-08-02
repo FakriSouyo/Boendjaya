@@ -18,11 +18,17 @@ export function exportFinancialCsv(rows: FinancialRow[], period: "daily" | "mont
   downloadBlob([header, ...lines].join("\n"), filename, "text/csv;charset=utf-8;");
 }
 
+export type PdfReportExtra = {
+  salesByProduct?: { name: string; quantity: number; revenue: number }[];
+  lowStock?: { name: string; currentStock: number; unit: string; minimumStock: number }[];
+};
+
 export async function exportFinancialPdf(
   rows: FinancialRow[],
   period: "daily" | "monthly",
   title: string,
   filename: string,
+  extra?: PdfReportExtra,
 ) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -56,11 +62,41 @@ export async function exportFinancialPdf(
 
   const totalRev = rows.reduce((s, r) => s + r.revenue, 0);
   const totalCogs = rows.reduce((s, r) => s + r.totalCogs, 0);
-  const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  const lastY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   doc.setFontSize(9);
-  doc.text(`Total penjualan: ${currency(totalRev)}`, 14, y);
-  doc.text(`Total COGS: ${currency(totalCogs)}`, 14, y + 5);
-  doc.text(`Total profit: ${currency(totalRev - totalCogs)}`, 14, y + 10);
+  doc.text(`Total penjualan: ${currency(totalRev)}`, 14, lastY + 8);
+  doc.text(`Total COGS: ${currency(totalCogs)}`, 14, lastY + 13);
+  doc.text(`Total profit: ${currency(totalRev - totalCogs)}`, 14, lastY + 18);
+
+  const sales = extra?.salesByProduct ?? [];
+  if (sales.length > 0) {
+    const y = lastY + 26;
+    doc.setFontSize(11);
+    doc.text("DAFTAR PRODUK TERJUAL", 14, y);
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["Produk", "Qty", "Pendapatan"]],
+      body: sales.map(s => [s.name, String(s.quantity), currency(s.revenue)]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [231, 59, 40] },
+      columnStyles: { 2: { halign: "right" } },
+    });
+  }
+
+  const lowStock = extra?.lowStock ?? [];
+  if (lowStock.length > 0) {
+    const afterSales = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    const y = (sales.length > 0 ? afterSales : lastY + 26) + 6;
+    doc.setFontSize(11);
+    doc.text("STOK BAHAN MENIPIS", 14, y);
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["Bahan", "Stok Sekarang", "Stok Minimum", "Satuan"]],
+      body: lowStock.map(l => [l.name, String(l.currentStock), String(l.minimumStock), l.unit]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [23, 16, 14] },
+    });
+  }
 
   doc.save(filename);
 }
