@@ -1,11 +1,29 @@
 import { buildRecipeLines, refreshProductCogs } from "./inventory";
-import type { Ingredient, NotificationItem, OutletSettings, Product, ProductSaleEntry, RecipeDraft, RecipeLine, StockPurchase, Transaction } from "./types";
+import type { DailyExpense, DailyIncomeRow, Ingredient, NotificationItem, OutletSettings, Product, ProductSaleEntry, RecipeDraft, RecipeLine, StockPurchase, Transaction } from "./types";
 import { jakartaDate } from "./format";
 import { supabase } from "./supabase/client";
 
 const GOAL_KEY = "boendjaya-daily-goal";
 const GOAL_NOTIFIED_KEY = "boendjaya-goal-notified";
 const DEMO_TODAY_REV_KEY = "boendjaya-demo-today-revenue";
+const DEMO_EXPENSES_KEY = "boendjaya-demo-expenses";
+
+export function loadDemoExpenses(): DailyExpense[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DEMO_EXPENSES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as DailyExpense[];
+  } catch { return []; }
+}
+
+export function saveDemoExpense(expense: DailyExpense) {
+  localStorage.setItem(DEMO_EXPENSES_KEY, JSON.stringify([expense, ...loadDemoExpenses()]));
+}
+
+export function removeDemoExpense(id: number) {
+  localStorage.setItem(DEMO_EXPENSES_KEY, JSON.stringify(loadDemoExpenses().filter(e => e.id !== id)));
+}
 
 export function loadDemoSettings(): OutletSettings {
   if (typeof window === "undefined") return { dailyRevenueTarget: 3000000, goalNotifiedDate: null };
@@ -341,6 +359,59 @@ export async function markNotificationRead(id: number) {
 export async function markAllNotificationsRead(ids: number[]) {
   if (!supabase || !ids.length) return;
   await supabase.from("notifications").update({ is_read: true }).in("id", ids);
+}
+
+export async function loadExpenses(): Promise<DailyExpense[]> {
+  if (!supabase) return loadDemoExpenses();
+  const { data, error } = await supabase
+    .from("daily_expenses")
+    .select("*")
+    .order("date", { ascending: false })
+    .limit(100);
+  if (error || !data?.length) return [];
+  return data.map(e => ({
+    id: e.id,
+    date: e.date,
+    amount: Number(e.amount),
+    category: e.category,
+    note: e.note,
+    createdAt: e.created_at,
+  }));
+}
+
+export async function addExpense(date: string, amount: number, category: string, note: string): Promise<number> {
+  if (!supabase) {
+    const expense: DailyExpense = { id: Date.now(), date, amount, category: category || null, note: note || null, createdAt: new Date().toISOString() };
+    saveDemoExpense(expense);
+    return expense.id;
+  }
+  const { data, error } = await supabase
+    .from("daily_expenses")
+    .insert({ date, amount, category: category || null, note: note || null })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return Number(data.id);
+}
+
+export async function deleteExpense(id: number) {
+  if (!supabase) {
+    removeDemoExpense(id);
+    return;
+  }
+  const { error } = await supabase.from("daily_expenses").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function loadDailyIncome(): Promise<DailyIncomeRow[]> {
+  if (!supabase) return [{ date: jakartaDate(new Date().toISOString()), revenue: getDemoTodayRevenue() }];
+  const { data, error } = await supabase
+    .from("daily_financials")
+    .select("report_date, revenue")
+    .order("report_date", { ascending: false })
+    .limit(60);
+  if (error || !data?.length) return [];
+  return data.map(r => ({ date: r.report_date, revenue: Number(r.revenue) }));
 }
 
 export function mergeCatalogWithRecipes(products: Product[], recipes: RecipeLine[]): Product[] {

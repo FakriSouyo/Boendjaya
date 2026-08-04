@@ -29,6 +29,20 @@ export type RecipeLine = {
   lineCost: number;
 };
 
+export type DailyExpense = {
+  id: number;
+  date: string;
+  amount: number;
+  category: string | null;
+  note: string | null;
+  createdAt: string;
+};
+
+export type DailyIncomeRow = {
+  date: string;
+  revenue: number;
+};
+
 export type StockPurchase = {
   id: number;
   ingredientId: number;

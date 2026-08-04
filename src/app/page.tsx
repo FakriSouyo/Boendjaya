@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, CircleDollarSign, ClipboardList, Menu, Package, Plus, ReceiptText, Search, ShoppingBag, UtensilsCrossed, X } from "lucide-react";
+import { ChevronRight, CircleDollarSign, ClipboardList, Menu, Package, PiggyBank, Plus, ReceiptText, Search, ShoppingBag, UtensilsCrossed, X } from "lucide-react";
 import { Button } from "@/components/ui/sensory-ui/button";
 import { usePlaySound } from "@/components/ui/sensory-ui/config/use-play-sound";
 import { CartPanel } from "@/components/cart-panel";
+import { DailyProfitPage } from "@/components/daily-profit-page";
 import { DashboardPage } from "@/components/dashboard-page";
 import { useDialog } from "@/components/dialog-provider";
 import { MenuCogsPage } from "@/components/menu-cogs-page";
@@ -32,7 +33,7 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase/client";
 import type { Ingredient, NotificationItem, Product, RecipeLine, StockPurchase, Transaction } from "@/lib/types";
 
 export default function Home() {
-  const [view, setView] = useState<"pos" | "dashboard" | "stock" | "menu" | "history">("pos");
+  const [view, setView] = useState<"pos" | "dashboard" | "stock" | "menu" | "history" | "profit">("pos");
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<Product[]>([]);
@@ -152,7 +153,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           <button type="button" onClick={() => setTab("pos")} className="font-serif text-2xl font-black leading-[.72] tracking-tighter text-[#e73b28]">Boen<br/>djaya</button>
           <nav className="hidden items-center gap-1 md:flex">
-            {[["pos", ShoppingBag, "POS"], ["history", ReceiptText, "Transaksi"], ["dashboard", ClipboardList, "Dashboard"], ["stock", Package, "Stok"], ["menu", UtensilsCrossed, "Menu & COGS"]].map(([key, Icon, label]) => (
+            {[["pos", ShoppingBag, "POS"], ["history", ReceiptText, "Transaksi"], ["profit", PiggyBank, "Profit"], ["dashboard", ClipboardList, "Dashboard"], ["stock", Package, "Stok"], ["menu", UtensilsCrossed, "Menu & COGS"]].map(([key, Icon, label]) => (
               <Button key={key as string} sound="navigation.tab" variant={view === key ? "default" : "ghost"} onClick={() => setTab(key as typeof view)} className="rounded-none text-xs">
                 <Icon className="size-3.5" />{label as string}
               </Button>
@@ -238,6 +239,7 @@ export default function Home() {
       )}
 
       {view === "dashboard" && <DashboardPage ingredients={ingredients} onGoalSaved={() => void refreshAll()} />}
+      {view === "profit" && <DailyProfitPage />}
       {view === "history" && <TransactionHistoryPage transactions={transactions} onDelete={async id => {
         await deleteTransaction(id);
         await refreshAll();
@@ -265,7 +267,7 @@ export default function Home() {
       )}
 
       <nav className={`fixed inset-x-0 bottom-0 z-20 flex border-t border-[#e8ddd8] bg-white pb-[env(safe-area-inset-bottom)] md:hidden ${payment || cartOpen || notifOpen ? "hidden" : ""}`}>
-        {[["pos", ShoppingBag, "POS"], ["history", ReceiptText, "Riwayat"], ["dashboard", ClipboardList, "Laporan"], ["stock", Package, "Stok"], ["menu", UtensilsCrossed, "COGS"]].map(([key, Icon, label]) => (
+        {[["pos", ShoppingBag, "POS"], ["history", ReceiptText, "Riwayat"], ["profit", PiggyBank, "Profit"], ["dashboard", ClipboardList, "Laporan"], ["stock", Package, "Stok"], ["menu", UtensilsCrossed, "COGS"]].map(([key, Icon, label]) => (
           <button key={key as string} type="button" onClick={() => setTab(key as typeof view)} className={`flex flex-1 flex-col items-center gap-1 py-3 text-[9px] ${view === key ? "bg-[#ef4130] text-white" : "text-zinc-500"}`}>
             <Icon className="size-4"/>{label as string}
           </button>
